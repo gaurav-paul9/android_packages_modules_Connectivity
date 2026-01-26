@@ -1141,19 +1141,9 @@ function uint8_t get_app_permissions() {
     return permissions ? *permissions : BPF_PERMISSION_INTERNET;
 }
 
-function int inet_socket_create(struct bpf_sock* sk, const struct kver_uint kver) {
+DEFINE_NETD_T_BPF_PROG_KVER(cgroupsock, inet_create, 4_14)
+(__unused struct bpf_sock* sk) {
     uint64_t gid_uid = bpf_get_current_uid_gid();
-
-    if (KVER_IS_AT_LEAST(kver, 5, 10)) {
-        SkStorageValue *sks = bpf_sk_storage_get(sk, 0, BPF_SK_STORAGE_GET_F_CREATE);
-        if (sks) {
-            sks->cookie = bpf_get_sk_cookie(sk);
-            sks->uid = gid_uid;
-            sks->gid = (gid_uid >> 32);
-            sks->l4s.enabled = (sk->type == SOCK_STREAM && sk->protocol == IPPROTO_TCP);
-        }
-    }
-
     uint32_t mapKey = 0;
     bool *uidMigrationEnabled = bpf_uid_migration_enabled_map_lookup_elem(&mapKey);
     if (uidMigrationEnabled && *uidMigrationEnabled) {
@@ -1164,16 +1154,6 @@ function int inet_socket_create(struct bpf_sock* sk, const struct kver_uint kver
     } else {
         return (get_app_permissions() & BPF_PERMISSION_INTERNET) ? BPF_ALLOW : BPF_DISALLOW;
     }
-}
-
-DEFINE_NETD_T_BPF_PROG_KVER(cgroupsock, inet_create, 5_10)
-(struct bpf_sock* sk) {
-    return inet_socket_create(sk, KVER_5_10);
-}
-
-DEFINE_NETD_T_BPF_PROG_KVER_RANGE(cgroupsock, inet_create, 4_14, 5_10)
-(struct bpf_sock* sk) {
-    return inet_socket_create(sk, KVER_4_14);
 }
 
 DEFINE_NETD_T_BPF_PROG_KVER(cgroupsockrelease, inet_release, 5_10)
